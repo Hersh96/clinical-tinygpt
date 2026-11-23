@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: clinical-tinygpt
+Version: 0.1.0
+Summary: A small GPT built from scratch on clinical text, for learning LLM internals
+Requires-Python: >=3.11
+Requires-Dist: torch>=2.3
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: regex
+Requires-Dist: pyyaml
+Requires-Dist: mlflow
+Requires-Dist: datasets
+Requires-Dist: tiktoken
+Requires-Dist: transformers
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"

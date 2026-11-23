@@ -89,3 +89,10 @@ def test_missing_artifact_is_skipped_not_fatal(workspace):
     (workspace["artifacts_dir"] / "bench_kv.json").unlink()
     names = {p.name for p in export(**workspace)}
     assert "kv_bench.json" not in names and "summary.json" in names
+
+
+def test_preview_flag_marks_summary(workspace):
+    export(**workspace, preview=True)
+    assert json.loads((workspace["out_dir"] / "summary.json").read_text())["preview"] is True
+    export(**workspace)
+    assert "preview" not in json.loads((workspace["out_dir"] / "summary.json").read_text())

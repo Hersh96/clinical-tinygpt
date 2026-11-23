@@ -1,0 +1,1 @@
+{"schema_version":1,"generated_at":"2026-11-23T21:29:56+00:00","tokens_per_word":{"ours":1.205475160925753,"ours_name":"ours_16384","gpt2":1.3514569308633482},"scaling_alpha":0.6005626299708658,"n_models":4,"kv_speedup_512":3.867168287169724,"best_bpb":{"model":"gpt_40m","bpb":1.4872643016875333,"n_params":754816},"gpt2_bpb":1.0007202686641947,"preview":true}

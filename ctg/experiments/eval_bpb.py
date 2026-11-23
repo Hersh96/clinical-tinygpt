@@ -78,12 +78,13 @@ def main() -> None:
                                                         temperature=0.8, top_k=50, seed=0)[0].tolist())}
             for p in PROMPTS]
         print(size, results[f"gpt_{size}"])
-    import tiktoken
     from transformers import GPT2LMHeadModel
 
-    g = tiktoken.get_encoding("gpt2")
+    from ctg.experiments.common import gpt2_tokenizer
+
+    g_encode, _, g_eot = gpt2_tokenizer()
     gpt2 = GPT2LMHeadModel.from_pretrained("gpt2").to(device).eval()
-    fn = lambda t: nll_sum(lambda x: gpt2(x).logits, [g.eot_token] + g.encode_ordinary(t), 1024, device)
+    fn = lambda t: nll_sum(lambda x: gpt2(x).logits, [g_eot] + g_encode(t), 1024, device)
     results["gpt2_small"] = {"bpb": eval_bpb(fn, texts), "n_params": sum(p.numel() for p in gpt2.parameters())}
     print("gpt2", results["gpt2_small"])
     Path(args.out).write_text(json.dumps(results, indent=1))

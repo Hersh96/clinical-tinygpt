@@ -16,3 +16,12 @@ def load_checkpoint(path: str, device) -> GPT:
     model = GPT(build_model_config(ck["model_config"])).to(device).eval()
     model.load_state_dict(ck["model"])
     return model
+
+
+def gpt2_tokenizer():
+    """GPT-2's tokenizer from the Hugging Face Hub: (encode, decode_one, eot_id)."""
+    from transformers import AutoTokenizer
+
+    tok = AutoTokenizer.from_pretrained("gpt2")
+    tok.model_max_length = 10**9  # we only count tokens; silence the 1024-token warning
+    return (lambda s: tok.encode(s, add_special_tokens=False)), (lambda i: tok.decode([i])), tok.eos_token_id

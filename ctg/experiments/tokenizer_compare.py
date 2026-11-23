@@ -42,9 +42,7 @@ def main() -> None:
     ap.add_argument("--n_docs", type=int, default=2000)
     ap.add_argument("--out", default="artifacts/tokenizer_compare.json")
     args = ap.parse_args()
-    import mlflow
-    import tiktoken
-
+    from ctg.experiments.common import gpt2_tokenizer
     from ctg.tokenizer.bpe import BPETokenizer
 
     texts = [json.loads(l)["text"] for _, l in zip(range(args.n_docs), open(args.val, encoding="utf-8"))]
@@ -53,13 +51,13 @@ def main() -> None:
         tok = BPETokenizer.load(d / "merges.json")
         encs[f"ours_{d.name}"] = tok.encode
         pcs[f"ours_{d.name}"] = tok.token_strings
-    g = tiktoken.get_encoding("gpt2")
-    encs["gpt2"] = g.encode_ordinary
-    pcs["gpt2"] = lambda s: [g.decode([i]) for i in g.encode_ordinary(s)]
+    g_encode, g_decode, _ = gpt2_tokenizer()
+    encs["gpt2"] = g_encode
+    pcs["gpt2"] = lambda s: [g_decode(i) for i in g_encode(s)]
     res = compare(encs, texts, pcs)
     Path(args.out).write_text(json.dumps(res, indent=1))
     from ctg.tracking import setup
-    setup(experiment="tokenizer")
+    mlflow = setup(experiment="tokenizer")
     with mlflow.start_run(run_name="tokenizer_compare"):
         for name, r in res.items():
             mlflow.log_metric(f"{name}_tokens_per_word", r["tokens_per_word"])

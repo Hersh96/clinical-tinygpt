@@ -114,7 +114,7 @@ def summary(tc: dict | None, sc: dict | None, kv: dict | None, bpb: dict | None)
 
 def export(out_dir: Path, artifacts_dir: Path = Path("artifacts"), mlflow_uri: str | None = None,
            ckpt: Path = Path("ckpt/gpt_40m/last.pt"), tokenizer: Path = Path("artifacts/tokenizer/8192/merges.json"),
-           ) -> list[Path]:
+           preview: bool = False) -> list[Path]:
     out_dir, artifacts_dir = Path(out_dir), Path(artifacts_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -137,7 +137,10 @@ def export(out_dir: Path, artifacts_dir: Path = Path("artifacts"), mlflow_uri: s
         written.append(_write(out_dir, "attention_example.json", attention_example(Path(ckpt), Path(tokenizer))))
     else:
         print(f"skipping attention example: {ckpt} or {tokenizer} not found")
-    written.append(_write(out_dir, "summary.json", summary(tc, sc, kv, bpb)))
+    s = summary(tc, sc, kv, bpb)
+    if preview:
+        s["preview"] = True  # the page shows a "preview data" banner
+    written.append(_write(out_dir, "summary.json", s))
     return written
 
 
@@ -147,8 +150,9 @@ def main() -> None:
     ap.add_argument("--artifacts", default="artifacts")
     ap.add_argument("--ckpt", default="ckpt/gpt_40m/last.pt")
     ap.add_argument("--tokenizer", default="artifacts/tokenizer/8192/merges.json")
+    ap.add_argument("--preview", action="store_true", help="mark the data as a preview (short test run)")
     args = ap.parse_args()
-    for p in export(Path(args.out), Path(args.artifacts), None, Path(args.ckpt), Path(args.tokenizer)):
+    for p in export(Path(args.out), Path(args.artifacts), None, Path(args.ckpt), Path(args.tokenizer), args.preview):
         print(f"{p}  ({p.stat().st_size / 1024:.0f} KB)")
 
 

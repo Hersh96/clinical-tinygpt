@@ -1,0 +1,12 @@
+torch>=2.3
+numpy
+scipy
+regex
+pyyaml
+mlflow
+datasets
+tiktoken
+transformers
+
+[dev]
+pytest
