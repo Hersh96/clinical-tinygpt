@@ -53,6 +53,16 @@ Browse every run with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
 
 If the laptop sleeps or shuts down during `make sweep`, run it again. Each model resumes from `ckpt/<run>/last.pt` at the same step, learning rate and data position.
 
+## Preview the guide page locally
+
+```bash
+make export                      # refresh site data from your runs
+python -m http.server -d site/public 8000
+# open http://localhost:8000/projects/clinical-tinygpt/index.html
+```
+
+The data committed now comes from a short CPU preview run with tiny models, and the page shows a "Preview" banner. `make export` replaces it with the real results.
+
 ## Learn the code
 
 Read in this order. Each file opens with a plain-English explanation of its concept.
@@ -70,7 +80,7 @@ Read in this order. Each file opens with a plain-English explanation of its conc
 ctg/            the Python package (data, tokenizer, model, train, experiments, export)
 configs/        one YAML per experiment
 tests/          pytest suite (CPU)
-site/           the interactive guide page and its tests
+site/           the interactive guide page and its tests (site/public/projects/ml-guide.css is a copy of the website's stylesheet, for local testing only)
 docs/superpowers/  design spec and implementation plan
 ```
 

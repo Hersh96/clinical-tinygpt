@@ -1,0 +1,27 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    env:
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: pip}
+      - name: Install (CPU torch)
+        run: |
+          pip install "$(grep '^torch==' requirements.lock)" --index-url https://download.pytorch.org/whl/cpu
+          grep -v '^torch==' requirements.lock > /tmp/req.txt
+          pip install -r /tmp/req.txt
+          pip install -e . --no-deps
+      - run: python -m pytest -q
+      - run: make smoke
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "20"}
+      - run: npm install --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - run: node --test site/tests/bpe.test.mjs site/tests/page.spec.mjs
