@@ -1,6 +1,6 @@
 # Run targets in this order on the laptop: data tokenizer tokenizer-compare tokens sweep bench eval export
 PY ?= python
-.PHONY: test data tokenizer tokenizer-compare tokens smoke sweep bench eval
+.PHONY: test data tokenizer tokenizer-compare tokens smoke sweep bench eval export
 test:
 	$(PY) -m pytest -q
 data:
@@ -21,3 +21,5 @@ bench:
 	$(PY) -m ctg.experiments.bench_kv --size 40m
 eval:
 	$(PY) -m ctg.experiments.eval_bpb
+export:
+	$(PY) -m ctg.export.site_data
