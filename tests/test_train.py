@@ -61,3 +61,45 @@ def test_resume_without_checkpoint_starts_fresh(bins):
 def test_preset_name_is_accepted(bins):
     from ctg.train.loop import build_model_config
     assert build_model_config({"preset": "5m"}).n_embd == 256
+
+
+def test_resume_state_is_loaded_onto_cpu(bins, tmp_path, monkeypatch):
+    """On the GPU laptop, map_location='cuda' would move the CPU RNG state too and
+    torch.set_rng_state rejects it. Resume state must always come back on the CPU."""
+    from ctg.train import loop
+    train(cfg(bins, stop_after=20))
+    real_load = torch.load
+
+    def fake_gpu_load(path, map_location=None, **kw):
+        ck = real_load(path, map_location="cpu", **kw)
+        if map_location != "cpu":  # simulate a non-CPU device: RNG state is no longer a CPU ByteTensor
+            ck["rng"]["torch"] = ck["rng"]["torch"].float()
+        return ck
+    monkeypatch.setattr(loop.torch, "load", fake_gpu_load)
+    state = loop.load_resume_state(tmp_path / "ckpt" / "t" / "last.pt")
+    assert state["rng"]["torch"].dtype == torch.uint8 and state["rng"]["torch"].device.type == "cpu"
+    out = train(cfg(bins, resume=True))  # must not raise
+    assert out["step"] == 100
+
+
+def test_resuming_a_finished_run_keeps_its_result(bins, tmp_path):
+    import mlflow
+    first = train(cfg(bins))
+    again = train(cfg(bins, resume=True))
+    assert again["final_val_loss"] == pytest.approx(first["final_val_loss"])
+    mlflow.set_tracking_uri(f"sqlite:///{tmp_path}/mlflow.db")
+    hist = mlflow.tracking.MlflowClient().get_metric_history(first["run_id"], "final_val_loss")
+    assert all(np.isfinite(m.value) for m in hist)
+
+
+def test_interrupt_returns_interrupted_and_saves(bins, tmp_path):
+    import os
+    import signal
+    import threading
+    t = threading.Timer(1.0, lambda: os.kill(os.getpid(), signal.SIGINT))
+    t.start()
+    out = train(cfg(bins, total_steps=100000, eval_every=100000))
+    t.cancel()
+    assert out["interrupted"] is True and 0 < out["step"] < 100000
+    ck = torch.load(tmp_path / "ckpt" / "t" / "last.pt", weights_only=False)
+    assert ck["step"] == out["step"]

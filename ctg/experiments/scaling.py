@@ -42,6 +42,16 @@ def predict(fit: dict, n: float) -> float:
     return fit["a"] * n ** (-fit["alpha"]) + fit["c"]
 
 
+def run_sweep(sizes: list[str], train_fn, load_fn) -> bool:
+    """Train each size in turn. Stop (return False) if a run was interrupted by Ctrl+C or shutdown."""
+    for size in sizes:
+        print(f"=== training {size} ===")
+        if train_fn(load_fn(size)).get("interrupted"):
+            print("interrupted: progress is saved; run `make sweep` again to resume")
+            return False
+    return True
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Train the four sizes (resumable), then fit the scaling law")
     ap.add_argument("--skip-train", action="store_true", help="only fit, from finished MLflow runs")
@@ -50,10 +60,8 @@ def main() -> None:
     from ctg.tracking import setup
     from ctg.train.loop import load_config, train
 
-    if not args.skip_train:
-        for size in SIZES:
-            print(f"=== training {size} ===")
-            train(load_config(f"configs/model_{size}.yaml"))
+    if not args.skip_train and not run_sweep(SIZES, train, lambda s: load_config(f"configs/model_{s}.yaml")):
+        return
     mlflow = setup(experiment="pretrain")
     runs = mlflow.search_runs(filter_string="tags.sweep = 'scaling_v1' and metrics.final_val_loss > 0",
                               order_by=["start_time DESC"])

@@ -96,3 +96,19 @@ def test_preview_flag_marks_summary(workspace):
     assert json.loads((workspace["out_dir"] / "summary.json").read_text())["preview"] is True
     export(**workspace)
     assert "preview" not in json.loads((workspace["out_dir"] / "summary.json").read_text())
+
+
+def test_loss_curve_keeps_latest_value_per_step(workspace):
+    """After a hard kill and resume, steps since the last checkpoint are logged twice."""
+    import mlflow
+    from mlflow.entities import Metric
+    mlflow.set_tracking_uri(workspace["mlflow_uri"])
+    run = mlflow.search_runs(experiment_names=["pretrain"], filter_string="tags.mlflow.runName = 'gpt_5m'",
+                             output_format="list")[0]
+    client = mlflow.tracking.MlflowClient()
+    client.log_batch(run.info.run_id, metrics=[Metric("val_loss", 99.0, 10**13, s) for s in (950, 1000)])
+    export(**workspace)
+    val = json.loads((workspace["out_dir"] / "loss_curves.json").read_text())["runs"]["gpt_5m"]["val"]
+    steps = [s for s, _ in val]  # 20 points: no downsampling, so duplicates would show
+    assert len(steps) == len(set(steps)) == 20
+    assert dict(map(tuple, val))[1000] == 99.0

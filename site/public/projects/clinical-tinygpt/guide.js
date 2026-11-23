@@ -125,7 +125,7 @@ function setupRail() {
 
 // ---------------------------------------------------------------- start here
 function renderSummary(s) {
-  if (!s) return;
+  if (!s) return missing("summary");
   if (s.preview) $("#preview-note").hidden = false;
   const set = (k, v) => { const el = $(`[data-stat="${k}"]`); if (el) el.textContent = v; };
   if (s.tokens_per_word) set("tpw", `${fmt(s.tokens_per_word.ours)} vs ${fmt(s.tokens_per_word.gpt2)}`);

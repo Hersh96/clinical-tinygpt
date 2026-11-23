@@ -61,6 +61,16 @@ def evaluate(model: GPT, val_bin: str, block_size: int, batch_size: int, n_batch
     return float(np.mean(losses))
 
 
+def load_resume_state(path: Path) -> dict:
+    """Read a checkpoint onto the CPU.
+
+    Loading straight onto the GPU would also move the CPU random-number state,
+    which ``torch.set_rng_state`` rejects. ``load_state_dict`` copies weights and
+    optimizer state to the right device afterwards.
+    """
+    return torch.load(path, map_location="cpu", weights_only=False)
+
+
 def train(cfg: dict) -> dict:
     import mlflow
 
@@ -74,21 +84,32 @@ def train(cfg: dict) -> dict:
     autocast = (lambda: torch.autocast("cuda", dtype=torch.bfloat16)) if use_bf16 else contextlib.nullcontext
 
     ckpt_path = Path(cfg["ckpt_dir"]) / cfg["run_name"] / "last.pt"
-    step, run_id = 0, None
+    step, run_id, val_loss = 0, None, float("nan")
     if cfg.get("resume") and ckpt_path.exists():
-        ck = torch.load(ckpt_path, map_location=device, weights_only=False)
+        ck = load_resume_state(ckpt_path)
         model.load_state_dict(ck["model"])
         opt.load_state_dict(ck["optimizer"])
         stream.load_state_dict(ck["stream"])
         torch.set_rng_state(ck["rng"]["torch"])
+        if device.startswith("cuda") and "cuda" in ck["rng"]:
+            torch.cuda.set_rng_state(ck["rng"]["cuda"])
         step, run_id = ck["step"], ck["run_id"]
+        val_loss = ck.get("val_loss", float("nan"))
         print(f"resumed {cfg['run_name']} at step {step}")
+    tokens_per_step = cfg["batch_size"] * cfg["grad_accum"] * mcfg.block_size
+    if step >= cfg["total_steps"]:
+        print(f"{cfg['run_name']} already finished; nothing to do")
+        return {"run_id": run_id, "final_val_loss": val_loss, "tokens_seen": step * tokens_per_step,
+                "params": model.num_params(), "step": step, "interrupted": False}
 
     def save():
+        rng = {"torch": torch.get_rng_state()}
+        if device.startswith("cuda"):
+            rng["cuda"] = torch.cuda.get_rng_state()
         ckpt_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = ckpt_path.with_suffix(".tmp")
         torch.save({"model": model.state_dict(), "optimizer": opt.state_dict(), "step": step,
-                    "stream": stream.state_dict(), "rng": {"torch": torch.get_rng_state()},
+                    "stream": stream.state_dict(), "rng": rng, "val_loss": val_loss,
                     "config": cfg, "model_config": mcfg.to_dict(), "run_id": run_id}, tmp)
         tmp.replace(ckpt_path)  # atomic: a crash mid-save never corrupts last.pt
 
@@ -105,7 +126,6 @@ def train(cfg: dict) -> dict:
 
     setup_tracking(cfg.get("mlflow_uri"), cfg.get("mlflow_experiment", "pretrain"))
     total, end = cfg["total_steps"], min(cfg["total_steps"], cfg.get("stop_after", cfg["total_steps"]))
-    tokens_per_step = cfg["batch_size"] * cfg["grad_accum"] * mcfg.block_size
     try:
         with mlflow.start_run(run_id=run_id, run_name=None if run_id else cfg["run_name"]) as run:
             if run_id is None:
@@ -114,7 +134,7 @@ def train(cfg: dict) -> dict:
                                    **{f"model.{k}": v for k, v in mcfg.to_dict().items()},
                                    "n_params": model.num_params(), "tokens_per_step": tokens_per_step})
                 mlflow.set_tags(cfg.get("tags", {}))
-            last_ckpt, t_log, val_loss = time.time(), time.time(), float("nan")
+            last_ckpt, t_log = time.time(), time.time()
             model.train()
             while step < end and not stop["flag"]:
                 lr = lr_at(step, cfg["max_lr"], cfg["warmup"], total, cfg["min_lr_ratio"])
@@ -149,11 +169,14 @@ def train(cfg: dict) -> dict:
             save()
             if step == total:
                 mlflow.log_metric("final_val_loss", val_loss)
+        if stop["flag"] and step < end:
+            # Mark the run as stopped (not finished) so it's clear it needs a resume.
+            mlflow.tracking.MlflowClient().set_terminated(run_id, "KILLED")
     finally:
         for s, h in old_handlers.items():
             signal.signal(s, h)
     return {"run_id": run_id, "final_val_loss": val_loss, "tokens_seen": step * tokens_per_step,
-            "params": model.num_params(), "step": step}
+            "params": model.num_params(), "step": step, "interrupted": stop["flag"] and step < end}
 
 
 def threading_main() -> bool:

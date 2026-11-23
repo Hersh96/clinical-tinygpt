@@ -14,7 +14,7 @@ let browser, site, blocked;
 before(async () => {
   browser = await chromium.launch();
   site = await serve(root);
-  blocked = await serve(root, new Set(["/projects/clinical-tinygpt/data/scaling.json"]));
+  blocked = await serve(root, new Set(["/projects/clinical-tinygpt/data/scaling.json", "/projects/clinical-tinygpt/data/summary.json"]));
 });
 after(async () => { await browser.close(); site.server.close(); blocked.server.close(); });
 
@@ -72,6 +72,7 @@ test("dark mode follows the system setting", async () => {
 test("a missing data file shows a message instead of a blank chart", async () => {
   const { page, errors } = await open(blocked.url);
   assert.match(await page.textContent("#scaling"), /Data not available yet/);
+  assert.match(await page.textContent("#start"), /Data not available yet/);
   assert.ok(await page.isVisible("#chart-loss"));
   assert.deepEqual(errors, []);
   await page.close();

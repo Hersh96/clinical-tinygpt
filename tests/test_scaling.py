@@ -41,3 +41,14 @@ def test_four_points_like_the_sweep():
 def test_needs_three_points():
     with pytest.raises(ValueError):
         fit_power_law([1e6, 2e6], [3.0, 2.9])
+
+
+def test_sweep_stops_when_a_run_is_interrupted():
+    from ctg.experiments.scaling import run_sweep
+    seen = []
+
+    def fake_train(cfg):
+        seen.append(cfg["run_name"])
+        return {"interrupted": cfg["run_name"] == "gpt_15m"}
+    assert run_sweep(["5m", "15m", "40m"], fake_train, lambda s: {"run_name": f"gpt_{s}"}) is False
+    assert seen == ["gpt_5m", "gpt_15m"]

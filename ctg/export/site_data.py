@@ -55,8 +55,13 @@ def loss_curves(mlflow_uri: str | None) -> dict:
         name = run.info.run_name
         if name in out:
             continue  # keep the latest run per size
-        hist = {k: sorted((m.step, round(m.value, 4)) for m in client.get_metric_history(run.info.run_id, k))
-                for k in ("train_loss", "val_loss")}
+        hist = {}
+        for k in ("train_loss", "val_loss"):
+            latest: dict[int, tuple[int, float]] = {}  # step -> (timestamp, value); a resume can re-log steps
+            for m in client.get_metric_history(run.info.run_id, k):
+                if m.step not in latest or m.timestamp >= latest[m.step][0]:
+                    latest[m.step] = (m.timestamp, m.value)
+            hist[k] = sorted((s, round(v, 4)) for s, (_, v) in latest.items())
         out[name] = {"train": [list(p) for p in _downsample(hist["train_loss"])],
                      "val": [list(p) for p in _downsample(hist["val_loss"])],
                      "n_params": int(float(run.data.params.get("n_params", 0)))}
