@@ -92,14 +92,19 @@ def test_resuming_a_finished_run_keeps_its_result(bins, tmp_path):
     assert all(np.isfinite(m.value) for m in hist)
 
 
-def test_interrupt_returns_interrupted_and_saves(bins, tmp_path):
+def test_interrupt_returns_interrupted_and_saves(bins, tmp_path, monkeypatch):
     import os
     import signal
-    import threading
-    t = threading.Timer(1.0, lambda: os.kill(os.getpid(), signal.SIGINT))
-    t.start()
+    from ctg.data.tokens import TokenStream
+    real_batch, calls = TokenStream.batch, {"n": 0}
+
+    def batch_then_signal(self, *a, **kw):  # deterministic: SIGINT arrives during step 5
+        calls["n"] += 1
+        if calls["n"] == 5:
+            os.kill(os.getpid(), signal.SIGINT)
+        return real_batch(self, *a, **kw)
+    monkeypatch.setattr(TokenStream, "batch", batch_then_signal)
     out = train(cfg(bins, total_steps=100000, eval_every=100000))
-    t.cancel()
-    assert out["interrupted"] is True and 0 < out["step"] < 100000
+    assert out["interrupted"] is True and out["step"] == 5
     ck = torch.load(tmp_path / "ckpt" / "t" / "last.pt", weights_only=False)
-    assert ck["step"] == out["step"]
+    assert ck["step"] == 5
