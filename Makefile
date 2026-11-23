@@ -1,6 +1,6 @@
 # Run targets in this order on the laptop: data tokenizer tokenizer-compare tokens sweep bench eval export
 PY ?= python
-.PHONY: test data tokenizer tokenizer-compare tokens smoke
+.PHONY: test data tokenizer tokenizer-compare tokens smoke sweep
 test:
 	$(PY) -m pytest -q
 data:
@@ -15,3 +15,5 @@ smoke:
 	$(PY) -m ctg.smoke
 train-%:
 	$(PY) -m ctg.train.loop --config configs/model_$*.yaml
+sweep:
+	$(PY) -m ctg.experiments.scaling
