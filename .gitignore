@@ -1,0 +1,11 @@
+.superpowers/
+__pycache__/
+*.pyc
+.venv*/
+mlruns/
+ckpt/
+data/raw/
+data/processed/
+artifacts/
+node_modules/
+.pytest_cache/
