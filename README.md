@@ -26,7 +26,7 @@ Documents are split 90/5/5 into train, validation and test by a hash of their ID
 ## Setup (Windows laptop, WSL2, RTX 4050 6 GB)
 
 1. On Windows, install a current NVIDIA driver. WSL2 uses the Windows driver, so don't install a Linux one.
-2. Install WSL2 with Ubuntu: `wsl --install -d Ubuntu`
+2. Install WSL2 with Ubuntu (24.04 recommended): `wsl --install -d Ubuntu-24.04`. Python 3.12+ is required; the setup script installs it on older Ubuntu.
 3. In Ubuntu, clone this repo and run:
 
 ```bash

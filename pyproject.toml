@@ -2,7 +2,7 @@
 name = "clinical-tinygpt"
 version = "0.1.0"
 description = "A small GPT built from scratch on clinical text, for learning LLM internals"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = ["torch>=2.3", "numpy", "scipy", "regex", "pyyaml", "mlflow", "datasets", "transformers"]
 
 [project.optional-dependencies]
