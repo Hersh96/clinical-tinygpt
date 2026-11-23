@@ -1,1 +1,4 @@
-preset: 5m
+base: pretrain_base.yaml
+run_name: gpt_5m
+model: {preset: 5m}
+max_lr: 2.0e-3

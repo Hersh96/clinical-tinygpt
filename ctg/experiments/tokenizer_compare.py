@@ -58,7 +58,8 @@ def main() -> None:
     pcs["gpt2"] = lambda s: [g.decode([i]) for i in g.encode_ordinary(s)]
     res = compare(encs, texts, pcs)
     Path(args.out).write_text(json.dumps(res, indent=1))
-    mlflow.set_experiment("tokenizer")
+    from ctg.tracking import setup
+    setup(experiment="tokenizer")
     with mlflow.start_run(run_name="tokenizer_compare"):
         for name, r in res.items():
             mlflow.log_metric(f"{name}_tokens_per_word", r["tokens_per_word"])

@@ -1,6 +1,6 @@
 # Run targets in this order on the laptop: data tokenizer tokenizer-compare tokens sweep bench eval export
 PY ?= python
-.PHONY: test data tokenizer tokenizer-compare tokens
+.PHONY: test data tokenizer tokenizer-compare tokens smoke
 test:
 	$(PY) -m pytest -q
 data:
@@ -11,3 +11,7 @@ tokenizer-compare:
 	$(PY) -m ctg.experiments.tokenizer_compare
 tokens:
 	$(PY) -m ctg.data.tokens --tokenizer artifacts/tokenizer/8192/merges.json --out data/tokens/8192
+smoke:
+	$(PY) -m ctg.smoke
+train-%:
+	$(PY) -m ctg.train.loop --config configs/model_$*.yaml

@@ -1,1 +1,4 @@
-preset: 40m
+base: pretrain_base.yaml
+run_name: gpt_40m
+model: {preset: 40m}
+max_lr: 1.0e-3

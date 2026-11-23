@@ -9,3 +9,6 @@ data/processed/
 artifacts/
 node_modules/
 .pytest_cache/
+mlflow.db
+mlartifacts/
+build/

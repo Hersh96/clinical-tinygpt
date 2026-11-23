@@ -1,0 +1,20 @@
+# Shared pretraining settings. Each model_<size> config sets `base: pretrain_base.yaml`.
+seed: 0
+device: null              # auto: cuda if available
+data:
+  train_bin: data/tokens/8192/train.bin
+  val_bin: data/tokens/8192/val.bin
+batch_size: 16
+grad_accum: 16            # 16 x 16 x 512 = 131,072 tokens per step
+max_lr: 1.0e-3
+min_lr_ratio: 0.1
+warmup: 50
+total_steps: 763          # ~100M tokens
+eval_every: 50
+eval_batches: 50
+log_every: 5
+ckpt_dir: ckpt
+ckpt_every_min: 10
+mlflow_experiment: pretrain
+resume: true
+tags: {sweep: scaling_v1}

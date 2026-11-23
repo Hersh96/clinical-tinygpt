@@ -1,0 +1,20 @@
+# End-to-end smoke run on the test fixtures; CPU, under 2 minutes.
+run_name: smoke
+seed: 0
+device: cpu
+model: {vocab_size: 300, n_layer: 2, n_head: 2, n_embd: 64, block_size: 64}
+data: {train_bin: build/smoke/train.bin, val_bin: build/smoke/val.bin}
+batch_size: 8
+grad_accum: 1
+max_lr: 3.0e-3
+min_lr_ratio: 0.1
+warmup: 10
+total_steps: 60
+eval_every: 30
+eval_batches: 2
+log_every: 10
+ckpt_dir: build/smoke/ckpt
+ckpt_every_min: 10
+mlflow_uri: sqlite:///build/smoke/mlflow.db
+mlflow_experiment: smoke
+resume: false

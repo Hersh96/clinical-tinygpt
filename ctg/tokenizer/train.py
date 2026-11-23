@@ -29,7 +29,8 @@ def main() -> None:
     cfg = yaml.safe_load(open(ap.parse_args().config))
     texts = sample_texts(Path(cfg["train_jsonl"]), cfg["sample_mb"])
     import mlflow
-    mlflow.set_experiment("tokenizer")
+    from ctg.tracking import setup
+    setup(experiment="tokenizer")
     for v in cfg["vocab_sizes"]:
         with mlflow.start_run(run_name=f"bpe_{v}"):
             t0 = time.time()
