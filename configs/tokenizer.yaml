@@ -1,0 +1,4 @@
+train_jsonl: data/processed/train.jsonl
+sample_mb: 50          # train merges on the first ~50 MB of training text
+vocab_sizes: [4096, 8192, 16384]
+out_dir: artifacts/tokenizer

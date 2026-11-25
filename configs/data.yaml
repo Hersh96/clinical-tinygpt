@@ -1,0 +1,19 @@
+# Corpus for both parts. Every source must carry a license string; prepare.py
+# stops if one is missing. Character caps keep the total near ~100M tokens.
+seed: 0
+sources:
+  - name: clinical_notes
+    kind: hf
+    dataset: AGBonnet/augmented-clinical-notes
+    split: train
+    text_field: note
+    summary_field: summary
+    license: "MIT (dataset card). Notes are de-identified PMC-Patients case reports."
+  - name: pubmed_abstracts
+    kind: hf
+    dataset: ccdv/pubmed-summarization
+    config: document
+    split: train
+    text_field: abstract
+    max_chars: 320000000   # ~80M tokens at ~4 chars/token
+    license: "Not stated on the dataset card (PubMed open-access abstracts). Used for training only; no text is redistributed."

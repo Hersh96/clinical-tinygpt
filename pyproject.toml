@@ -1,0 +1,17 @@
+[project]
+name = "clinical-tinygpt"
+version = "0.1.0"
+description = "A small GPT built from scratch on clinical text, for learning LLM internals"
+requires-python = ">=3.12"
+dependencies = ["torch>=2.3", "numpy", "scipy", "regex", "pyyaml", "mlflow", "datasets", "transformers"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["ctg*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: longer CPU tests"]
+filterwarnings = ["ignore::DeprecationWarning:sqlalchemy.*", "ignore:.*noload.*"]

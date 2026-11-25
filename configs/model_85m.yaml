@@ -1,0 +1,6 @@
+base: pretrain_base.yaml
+run_name: gpt_85m
+model: {preset: 85m}
+max_lr: 6.0e-4
+batch_size: 8             # halve the micro-batch to fit 6 GB ...
+grad_accum: 32            # ... and double accumulation: same 131,072 tokens per step

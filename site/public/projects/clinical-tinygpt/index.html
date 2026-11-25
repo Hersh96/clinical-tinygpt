@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Clinical TinyGPT: an LLM built from scratch | Hersh Shukla</title>
+<meta name="description" content="An interactive guide to a small GPT built from scratch on clinical text: a hand-written tokenizer, transformer, KV cache, training loop and scaling sweep, with every result measured."/>
+<link rel="canonical" href="https://hershshukla.com/projects/clinical-tinygpt/index.html"/>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="stylesheet" href="/projects/ml-guide.css"/>
+<link rel="stylesheet" href="guide.css"/>
+</head>
+<body>
+<header class="top"><a href="/#projects">&larr; Hersh Shukla</a><nav><a href="#start">Start here</a><a href="#tokenization">Chapters</a><a href="https://github.com/Hersh96/clinical-tinygpt" target="_blank" rel="noreferrer">Repository &nearr;</a></nav></header>
+
+<div class="guide">
+<nav class="rail" aria-label="Chapters">
+  <p class="rail-title">Your progress</p>
+  <ol id="rail">
+    <li><a href="#start" data-ch="start">Start here</a></li>
+    <li><a href="#tokenization" data-ch="tokenization">1. Tokenization</a></li>
+    <li><a href="#transformer" data-ch="transformer">2. The transformer</a></li>
+    <li><a href="#training" data-ch="training">3. Training</a></li>
+    <li><a href="#scaling" data-ch="scaling">4. Scaling</a></li>
+    <li><a href="#kv-cache" data-ch="kv-cache">5. KV cache</a></li>
+    <li><a href="#results" data-ch="results">6. Results</a></li>
+  </ol>
+  <p class="rail-count" id="rail-count"></p>
+</nav>
+
+<main>
+<section id="start" class="chapter">
+<p class="eyebrow">LLM internals / Tokenization / Scaling / MLOps</p>
+<h1>Clinical TinyGPT: a language model built from scratch</h1>
+<p class="lede">Large language models like ChatGPT can feel like magic. This project takes the magic apart. I built a small GPT-style model piece by piece, trained it on clinical text on a laptop GPU, and measured what every piece does. This guide walks you through it in six short chapters. You don't need any machine learning background.</p>
+<p class="note" id="data-note">Data: about 30,000 de-identified clinical case notes (<a href="https://huggingface.co/datasets/AGBonnet/augmented-clinical-notes" target="_blank" rel="noreferrer">augmented-clinical-notes</a>, MIT license) plus public PubMed abstracts. The model is a learning project and is <b>not for clinical use</b>.</p>
+<p class="note preview" id="preview-note" hidden>Preview: these charts come from a short CPU test run with tiny models. They show the real pipeline, but the numbers will change when the full runs on the laptop GPU finish.</p>
+<div class="stats" id="stats" data-needs="summary">
+  <div><b data-stat="tpw">&mdash;</b><span>tokens per word, our tokenizer vs GPT-2</span></div>
+  <div><b data-stat="bpb">&mdash;</b><span>bits per byte, best model (lower is better)</span></div>
+  <div><b data-stat="kv">&mdash;</b><span>faster generation with the KV cache</span></div>
+  <div><b data-stat="alpha">&mdash;</b><span>scaling exponent across model sizes</span></div>
+</div>
+
+<h2>How a language model works, in one picture</h2>
+<p>Every chapter is one stage of this pipeline. Click a stage to jump to it.</p>
+<ol class="pipeline" id="pipeline">
+  <li><a href="#tokenization"><b>01 / TEXT TO TOKENS</b>Split text into pieces and give each piece a number</a></li>
+  <li><a href="#transformer"><b>02 / THE MODEL</b>Tokens become vectors, attention mixes them, the model scores every possible next token</a></li>
+  <li><a href="#training"><b>03 / TRAINING</b>Show it millions of tokens and nudge the weights to guess the next one better</a></li>
+  <li><a href="#scaling"><b>04 / SCALING</b>Train 4 sizes and measure how much bigger helps</a></li>
+  <li><a href="#kv-cache"><b>05 / GENERATION</b>Write text one token at a time, fast, with a KV cache</a></li>
+  <li><a href="#results"><b>06 / RESULTS</b>Compare against GPT-2 and read what it writes</a></li>
+  <li class="later"><span><b>07 / FINE-TUNING</b>Part 2, coming next: adapting SmolLM2 to summarize notes with LoRA</span></li>
+</ol>
+</section>
+
+<section id="tokenization" class="chapter">
+<h2>1. Tokenization: turning text into numbers</h2>
+<p>A model can only do math on numbers, so the first step is to cut text into pieces called <button class="term" data-term="token">tokens</button> and give each one an ID. My tokenizer uses <button class="term" data-term="bpe">byte pair encoding</button>. It starts from single bytes, then repeatedly glues together the pair of pieces that appears most often in the training text. After thousands of merges, common clinical words like "patient" become a single token.</p>
+<h3>Try it: type anything</h3>
+<div class="playground" data-needs="merges">
+  <div class="pg-controls">
+    <label for="tok-input">Text</label>
+    <textarea id="tok-input" rows="3">The patient denies chest pain. Started metformin 500 mg BID.</textarea>
+    <label for="tok-vocab">Vocabulary size</label>
+    <select id="tok-vocab"><option value="4096">4,096 tokens</option><option value="8192" selected>8,192 tokens</option><option value="16384">16,384 tokens</option></select>
+  </div>
+  <p class="pg-count" id="tok-count" aria-live="polite"></p>
+  <div class="chips" id="tok-chips"></div>
+</div>
+<p>Each colored box is one token. Try a long drug name like "hydrochlorothiazide". A bigger vocabulary keeps more words in one piece, but it makes the model's lookup table bigger too.</p>
+<h3>How well does each tokenizer fit clinical text?</h3>
+<div class="chart-box" data-needs="tokenizer_compare"><canvas id="chart-tokenizer" aria-label="Tokens per word for each tokenizer" role="img"></canvas></div>
+<div class="table" id="term-table" data-needs="tokenizer_compare"></div>
+<div class="means"><b>What this means</b><p id="tok-means">Fewer tokens per word means shorter sequences, so the model can read more text in its fixed window and trains faster. GPT-2's tokenizer was built on web text, which is why it splits medical words into more pieces than a tokenizer trained on clinical notes.</p></div>
+<p class="code-link"><a href="https://github.com/Hersh96/clinical-tinygpt/blob/main/ctg/tokenizer/bpe.py" target="_blank" rel="noreferrer">Read the code: ctg/tokenizer/bpe.py &nearr;</a></p>
+</section>
+
+<section id="transformer" class="chapter">
+<h2>2. The transformer: how the model reads</h2>
+<p>The model is a stack of <button class="term" data-term="block">transformer blocks</button>. Step through one real sentence below to see what happens inside it.</p>
+<div class="stepper" data-needs="attention_example">
+  <div class="steps" role="tablist">
+    <button role="tab" data-step="0" aria-selected="true">1. Tokens</button>
+    <button role="tab" data-step="1">2. Embeddings</button>
+    <button role="tab" data-step="2">3. Attention</button>
+    <button role="tab" data-step="3">4. Next token</button>
+  </div>
+  <div class="step-panel" id="tf-panel"></div>
+</div>
+<div class="means"><b>What this means</b><p>Attention is how a word like "denies" can affect "chest pain" later in the sentence. This matters in clinical text, where "denies chest pain" means the opposite of "chest pain". Each layer and head learns its own pattern of what to look at.</p></div>
+<p class="code-link"><a href="https://github.com/Hersh96/clinical-tinygpt/blob/main/ctg/model/layers.py" target="_blank" rel="noreferrer">Read the code: ctg/model/layers.py &nearr;</a></p>
+</section>
+
+<section id="training" class="chapter">
+<h2>3. Training: learning to guess the next token</h2>
+<p>Training shows the model a window of real text and asks it to predict each next token. The <button class="term" data-term="loss">loss</button> measures how surprised it was. After each batch, the <button class="term" data-term="optimizer">optimizer</button> nudges millions of weights to make it a bit less surprised next time. Click a model in the legend to show or hide it.</p>
+<div class="chart-box tall" data-needs="loss_curves"><canvas id="chart-loss" aria-label="Training and validation loss for each model size" role="img"></canvas></div>
+<div class="means"><b>What this means</b><p>All the curves drop quickly at first, as the model learns spelling and common words, then flatten out. Bigger models end lower. Validation loss comes from notes the model never trained on, so it tracks training loss closely when the model is learning patterns instead of memorizing.</p></div>
+<p class="code-link"><a href="https://github.com/Hersh96/clinical-tinygpt/blob/main/ctg/train/loop.py" target="_blank" rel="noreferrer">Read the code: ctg/train/loop.py &nearr;</a></p>
+</section>
+
+<section id="scaling" class="chapter">
+<h2>4. Scaling: does bigger mean better?</h2>
+<p>I trained four model sizes on the same data and fit a <button class="term" data-term="powerlaw">power law</button> to their final losses. This is the same kind of curve AI labs use to decide how big their next model should be.</p>
+<div data-needs="scaling">
+  <div class="chart-box tall"><canvas id="chart-scaling" aria-label="Validation loss against model size, log scale, with fitted curve" role="img"></canvas></div>
+  <div class="slider">
+    <label for="scale-slider">Pick a model size</label>
+    <input type="range" id="scale-slider" min="5" max="9" step="0.05" value="7.5"/>
+    <output id="scale-out" for="scale-slider"></output>
+  </div>
+</div>
+<div class="means"><b>What this means</b><p id="scale-means">Loss falls steadily as the model grows, but each step up helps a little less. The floor the curve flattens toward depends on the data and the training budget, and adding parameters alone can't get below it.</p></div>
+<p class="code-link"><a href="https://github.com/Hersh96/clinical-tinygpt/blob/main/ctg/experiments/scaling.py" target="_blank" rel="noreferrer">Read the code: ctg/experiments/scaling.py &nearr;</a></p>
+</section>
+
+<section id="kv-cache" class="chapter">
+<h2>5. The KV cache: writing fast</h2>
+<p>The model writes one token at a time. Each new token has to look back at every earlier one through attention, using a <button class="term" data-term="kv">key and a value</button> for each. Without a cache, the model recomputes all of them at every step. With a cache, it saves them and only computes the newest one.</p>
+<div class="kv-demo">
+  <div class="kv-row"><span class="kv-label">Without cache</span><div class="kv-cells" id="kv-nocache"></div><span class="kv-work" id="kv-work-no">0 computed</span></div>
+  <div class="kv-row"><span class="kv-label">With cache</span><div class="kv-cells" id="kv-cache"></div><span class="kv-work" id="kv-work-yes">0 computed</span></div>
+  <button class="btn" id="kv-play" type="button">Play</button>
+</div>
+<div class="chart-box" data-needs="kv_bench"><canvas id="chart-kv" aria-label="Generation speed with and without the KV cache" role="img"></canvas></div>
+<div class="means"><b>What this means</b><p id="kv-means">Without the cache, the work grows with the square of the text length. With it, the work grows linearly. That's why every production LLM uses one. The cost is memory for the saved keys and values.</p></div>
+<p class="code-link"><a href="https://github.com/Hersh96/clinical-tinygpt/blob/main/ctg/model/kv_cache.py" target="_blank" rel="noreferrer">Read the code: ctg/model/kv_cache.py &nearr;</a></p>
+</section>
+
+<section id="results" class="chapter">
+<h2>6. Results: how good is it?</h2>
+<p>Tokenizers differ, so comparing losses directly would be unfair. Instead I measure <button class="term" data-term="bpb">bits per byte</button> on held-out notes, which means the same thing for every model. GPT-2 small is the reference. It has 124 million parameters and was trained on far more text.</p>
+<div class="chart-box" data-needs="bpb"><canvas id="chart-bpb" aria-label="Bits per byte for each model, lower is better" role="img"></canvas></div>
+<h3>What does it write?</h3>
+<p>These are real outputs for fixed prompts, shown exactly as generated. They're synthetic text, not medical advice.</p>
+<div data-needs="samples">
+  <label for="sample-model">Model</label> <select id="sample-model"></select>
+  <div id="samples" class="samples"></div>
+</div>
+<div class="means"><b>What this means</b><p>Small models learn the style of clinical notes long before they learn facts. The text sounds like a case report, but the details are made up. That's exactly why Part 2 fine-tunes a stronger pretrained model and checks it for made-up facts.</p></div>
+<p class="code-link"><a href="https://github.com/Hersh96/clinical-tinygpt/blob/main/ctg/experiments/eval_bpb.py" target="_blank" rel="noreferrer">Read the code: ctg/experiments/eval_bpb.py &nearr;</a></p>
+
+<h2>How it's built</h2>
+<ul>
+  <li>The tokenizer, attention, RoPE, RMSNorm, SwiGLU, KV cache and training loop are all written by hand in PyTorch. No model code is imported.</li>
+  <li>Every run is tracked in MLflow, every experiment has a YAML config and a <code>make</code> target, and training resumes from a checkpoint if the laptop shuts down.</li>
+  <li>All of it trains on a 6 GB RTX 4050 laptop GPU. The charts on this page are generated from the MLflow runs by one export script.</li>
+</ul>
+<div class="links"><a class="btn primary" href="https://github.com/Hersh96/clinical-tinygpt" target="_blank" rel="noreferrer">View the code on GitHub</a><a class="btn" href="/#projects">Back to selected work</a></div>
+</section>
+</main>
+</div>
+
+<div id="glossary-pop" role="dialog" aria-modal="false" hidden><p id="glossary-text"></p><button type="button" id="glossary-close" aria-label="Close definition">Close</button></div>
+<footer>Built and written by Hersh Shukla. Public data only; no employer or patient data. Not for clinical use.</footer>
+<script src="vendor/chart.umd.min.js"></script>
+<script type="module" src="guide.js"></script>
+</body>
+</html>
