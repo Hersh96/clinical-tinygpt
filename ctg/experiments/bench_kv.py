@@ -4,6 +4,11 @@ Without a cache, producing token n means re-running the model over all n
 earlier tokens, so each new token gets slower as the text grows. With a cache,
 each step only processes the one new token. We measure tokens per second and
 peak memory for several output lengths.
+
+We run it twice. On the CPU, the model's arithmetic is the bottleneck, so
+skipping the recomputation shows up directly as speed. On a GPU with a single
+sequence, each step is so small that the fixed cost of launching GPU work
+dominates, and the cache only pulls ahead once the text gets long.
 """
 from __future__ import annotations
 
@@ -39,6 +44,9 @@ def bench(model, lengths: list[int] = [64, 128, 256, 512, 1024], repeats: int = 
     return rows
 
 
+CPU_LENGTHS = [64, 128, 256, 512]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--size", default="40m")
@@ -47,10 +55,15 @@ def main() -> None:
     from ctg.experiments.common import load_checkpoint
     from ctg.tracking import setup
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = load_checkpoint(f"ckpt/gpt_{args.size}/last.pt", device)
-    rows = bench(model, device=device)
-    Path(args.out).write_text(json.dumps({"model": f"gpt_{args.size}", "device": device, "rows": rows}, indent=1))
+    runs = []
+    if torch.cuda.is_available():
+        model = load_checkpoint(f"ckpt/gpt_{args.size}/last.pt", "cuda")
+        runs.append({"device": "cuda", "rows": bench(model, device="cuda")})
+        del model
+        torch.cuda.empty_cache()
+    model = load_checkpoint(f"ckpt/gpt_{args.size}/last.pt", "cpu")
+    runs.append({"device": "cpu", "rows": bench(model, lengths=CPU_LENGTHS, repeats=1, device="cpu")})
+    Path(args.out).write_text(json.dumps({"model": f"gpt_{args.size}", "runs": runs}, indent=1))
     mlflow = setup(experiment="eval")
     with mlflow.start_run(run_name="bench_kv"):
         mlflow.log_artifact(args.out)

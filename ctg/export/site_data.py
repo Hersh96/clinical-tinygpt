@@ -94,20 +94,34 @@ def attention_example(ckpt: Path, tokenizer: Path) -> dict:
     }
 
 
-def summary(tc: dict | None, sc: dict | None, kv: dict | None, bpb: dict | None) -> dict:
+def kv_runs(kv: dict) -> list[dict]:
+    """bench_kv.json holds one run per device; older files hold a single run at the top level."""
+    if "runs" in kv:
+        return kv["runs"]
+    return [{"device": kv.get("device", "cpu"), "rows": kv["rows"]}]
+
+
+def _speedup(rows: list[dict], length: int = 512) -> float:
+    r = {(row["length"], row["cache"]): row["tokens_per_sec"] for row in rows}
+    if (length, True) not in r:
+        length = max(L for L, _ in r)
+    return r[(length, True)] / r[(length, False)]
+
+
+def summary(tc: dict | None, sc: dict | None, kv: dict | None, bpb: dict | None, trained_vocab: str | None = None) -> dict:
     s: dict = {}
     if tc:
         ours = {k: v for k, v in tc.items() if k.startswith("ours_")}
-        best = min(ours, key=lambda k: ours[k]["tokens_per_word"])
-        s["tokens_per_word"] = {"ours": ours[best]["tokens_per_word"], "ours_name": best,
+        name = f"ours_{trained_vocab}" if f"ours_{trained_vocab}" in ours else min(ours, key=lambda k: ours[k]["tokens_per_word"])
+        s["tokens_per_word"] = {"ours": ours[name]["tokens_per_word"], "ours_name": name,
                                 "gpt2": tc["gpt2"]["tokens_per_word"]}
     if sc:
         s["scaling_alpha"] = sc["fit"]["alpha"]
         s["n_models"] = len(sc["points"])
     if kv:
-        r = {(row["length"], row["cache"]): row["tokens_per_sec"] for row in kv["rows"]}
-        L = max(length for length, _ in r)
-        s["kv_speedup_512"] = r.get((512, True), r[(L, True)]) / r.get((512, False), r[(L, False)])
+        by_device = {run["device"]: _speedup(run["rows"]) for run in kv_runs(kv)}
+        s["kv_speedup_512"] = by_device.get("cpu", next(iter(by_device.values())))
+        s["kv_speedup_512_by_device"] = by_device
     if bpb:
         ours = {k: v for k, v in bpb.items() if k.startswith("gpt_")}
         best = min(ours, key=lambda k: ours[k]["bpb"])
@@ -131,7 +145,7 @@ def export(out_dir: Path, artifacts_dir: Path = Path("artifacts"), mlflow_uri: s
     kv = _read(artifacts_dir / "bench_kv.json")
     bpb = _read(artifacts_dir / "bpb.json")
     samples = _read(artifacts_dir / "samples.json")
-    for name, data in (("tokenizer_compare.json", {"tokenizers": tc}), ("scaling.json", sc), ("kv_bench.json", kv),
+    for name, data in (("tokenizer_compare.json", {"tokenizers": tc}), ("scaling.json", sc), ("kv_bench.json", kv and {"model": kv.get("model", "model"), "runs": kv_runs(kv)}),
                        ("bpb.json", {"models": bpb}), ("samples.json", {"models": samples})):
         if data and all(v is not None for v in data.values()):
             written.append(_write(out_dir, name, data))
@@ -142,7 +156,7 @@ def export(out_dir: Path, artifacts_dir: Path = Path("artifacts"), mlflow_uri: s
         written.append(_write(out_dir, "attention_example.json", attention_example(Path(ckpt), Path(tokenizer))))
     else:
         print(f"skipping attention example: {ckpt} or {tokenizer} not found")
-    s = summary(tc, sc, kv, bpb)
+    s = summary(tc, sc, kv, bpb, trained_vocab=Path(tokenizer).parent.name)
     if preview:
         s["preview"] = True  # the page shows a "preview data" banner
     written.append(_write(out_dir, "summary.json", s))

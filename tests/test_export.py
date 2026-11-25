@@ -112,3 +112,24 @@ def test_loss_curve_keeps_latest_value_per_step(workspace):
     steps = [s for s, _ in val]  # 20 points: no downsampling, so duplicates would show
     assert len(steps) == len(set(steps)) == 20
     assert dict(map(tuple, val))[1000] == 99.0
+
+
+def test_kv_headline_uses_cpu_and_keeps_every_device(workspace):
+    rows = lambda y, n: [{"length": 512, "cache": True, "tokens_per_sec": y}, {"length": 512, "cache": False, "tokens_per_sec": n}]
+    (workspace["artifacts_dir"] / "bench_kv.json").write_text(json.dumps(
+        {"model": "gpt_40m", "runs": [{"device": "cuda", "rows": rows(45, 44)}, {"device": "cpu", "rows": rows(400, 100)}]}))
+    export(**workspace)
+    s = json.loads((workspace["out_dir"] / "summary.json").read_text())
+    assert s["kv_speedup_512"] == pytest.approx(4.0)
+    assert s["kv_speedup_512_by_device"]["cuda"] == pytest.approx(45 / 44)
+    kv = json.loads((workspace["out_dir"] / "kv_bench.json").read_text())
+    assert [r["device"] for r in kv["runs"]] == ["cuda", "cpu"]
+
+
+def test_tokens_per_word_reports_the_tokenizer_the_models_use(workspace):
+    (workspace["artifacts_dir"] / "tokenizer_compare.json").write_text(json.dumps(
+        {"ours_300": {"tokens_per_word": 1.4}, "ours_320": {"tokens_per_word": 1.3}, "ours_340": {"tokens_per_word": 1.2},
+         "gpt2": {"tokens_per_word": 1.6}}))
+    export(**workspace)  # the workspace's models use the 320 tokenizer
+    s = json.loads((workspace["out_dir"] / "summary.json").read_text())
+    assert s["tokens_per_word"]["ours_name"] == "ours_320" and s["tokens_per_word"]["ours"] == pytest.approx(1.3)

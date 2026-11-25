@@ -131,6 +131,7 @@ function renderSummary(s) {
   if (s.tokens_per_word) set("tpw", `${fmt(s.tokens_per_word.ours)} vs ${fmt(s.tokens_per_word.gpt2)}`);
   if (s.best_bpb) set("bpb", `${fmt(s.best_bpb.bpb, 2)}${s.gpt2_bpb ? ` vs ${fmt(s.gpt2_bpb, 2)}` : ""}`);
   if (s.kv_speedup_512) set("kv", `${fmt(s.kv_speedup_512, 1)}×`);
+  if (s.kv_speedup_512_by_device?.cpu) { const el = $('[data-stat="kv"] + span'); if (el) el.textContent = "faster generation with the KV cache (CPU, 512 tokens)"; }
   if (s.scaling_alpha != null) set("alpha", `α = ${fmt(s.scaling_alpha, 2)}`);
 }
 
@@ -333,19 +334,33 @@ function setupKvDemo() {
 }
 function renderKv(d) {
   if (!d) return missing("kv_bench");
-  const lengths = [...new Set(d.rows.map((r) => r.length))].sort((a, b) => a - b);
-  const get = (cache) => lengths.map((L) => d.rows.find((r) => r.length === L && r.cache === cache)?.tokens_per_sec);
+  // Older files hold one run at the top level; newer ones hold one run per device.
+  const runs = d.runs || [{ device: d.device || "cpu", rows: d.rows }];
+  const lengths = [...new Set(runs.flatMap((r) => r.rows.map((x) => x.length)))].sort((a, b) => a - b);
+  const get = (run, cache) => lengths.map((L) => run.rows.find((r) => r.length === L && r.cache === cache)?.tokens_per_sec ?? null);
+  const name = (dev) => (dev === "cuda" ? "GPU" : "CPU");
+  const datasets = runs.flatMap((run, i) => [
+    { label: `${name(run.device)}, with cache`, data: get(run, true), borderColor: series(i), backgroundColor: series(i), pointRadius: 4, spanGaps: true },
+    { label: `${name(run.device)}, without cache`, data: get(run, false), borderColor: series(i), backgroundColor: series(i), borderDash: [5, 4], pointRadius: 4, spanGaps: true },
+  ]);
   chart($("#chart-kv"), {
     type: "line",
-    data: { labels: lengths, datasets: [
-      { label: "With KV cache", data: get(true), borderColor: series(0), backgroundColor: series(0), pointRadius: 4 },
-      { label: "Without cache", data: get(false), borderColor: theme().muted, backgroundColor: theme().muted, borderDash: [5, 4], pointRadius: 4 },
-    ] },
+    data: { labels: lengths, datasets },
     options: { plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmt(c.raw, 0)} tokens/s` } } },
-      scales: { x: { title: { display: true, text: "Tokens generated" } }, y: { beginAtZero: true, title: { display: true, text: `Tokens per second (${d.model || "model"}, ${d.device || ""})` } } } },
+      scales: { x: { title: { display: true, text: "Tokens generated" } }, y: { beginAtZero: true, title: { display: true, text: `Tokens per second (${d.model || "model"})` } } } },
   });
-  const last = lengths[lengths.length - 1], y = get(true).at(-1), n = get(false).at(-1);
-  if (y && n) $("#kv-means").textContent = `At ${last} tokens the cache makes generation ${fmt(y / n, 1)} times faster. ` + $("#kv-means").textContent;
+  const at = (run) => {
+    const ys = get(run, true), ns = get(run, false);
+    const i = lengths.indexOf(512) >= 0 && ys[lengths.indexOf(512)] ? lengths.indexOf(512) : ys.findLastIndex((v) => v);
+    return ys[i] && ns[i] ? { L: lengths[i], x: ys[i] / ns[i] } : null;
+  };
+  const parts = runs.map((run) => [run.device, at(run)]).filter(([, r]) => r);
+  const cpu = parts.find(([dev]) => dev === "cpu"), gpu = parts.find(([dev]) => dev === "cuda");
+  let text = "";
+  if (cpu) text += `On the CPU, the cache makes generating ${cpu[1].L} tokens ${fmt(cpu[1].x, 1)} times faster. `;
+  if (gpu) text += `On the laptop GPU it's ${fmt(gpu[1].x, 2)} times. With one sequence at a time, each step is so small that the fixed cost of starting GPU work dominates, so the GPU barely notices the extra recomputation until the text gets long. The cache saves the same work on both; it only shows up as speed when the arithmetic is the bottleneck, as it is on a CPU or when serving many users at once. `;
+  if (!cpu && !gpu && parts.length) text += `At ${parts[0][1].L} tokens the cache makes generation ${fmt(parts[0][1].x, 1)} times faster. `;
+  $("#kv-means").textContent = text + $("#kv-means").textContent;
 }
 
 // ---------------------------------------------------------------- 6. results
