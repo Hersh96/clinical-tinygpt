@@ -25,6 +25,11 @@ from ctg.model.generate import generate
 def bench(model, lengths: list[int] = [64, 128, 256, 512, 1024], repeats: int = 3, device="cpu") -> list[dict]:
     rows = []
     prompt = torch.zeros(1, 1, dtype=torch.long, device=device)
+    # Warm up first: the first calls pay one-off costs (memory allocation, kernel
+    # selection, the CPU raising its clock speed) that would make short runs look slow.
+    for cache in (True, False):
+        for _ in range(3):
+            generate(model, prompt, min(64, max(lengths)), temperature=0, use_cache=cache)
     for length in lengths:
         for cache in (True, False):
             best = 0.0
