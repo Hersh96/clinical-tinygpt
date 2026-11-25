@@ -8,7 +8,7 @@ peak memory for several output lengths.
 We run it twice. On the CPU, the model's arithmetic is the bottleneck, so
 skipping the recomputation shows up directly as speed. On a GPU with a single
 sequence, each step is so small that the fixed cost of launching GPU work
-dominates, and the cache only pulls ahead once the text gets long.
+dominates, so the cache measured about even on the laptop GPU up to 1,024 tokens.
 """
 from __future__ import annotations
 

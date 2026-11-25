@@ -358,7 +358,7 @@ function renderKv(d) {
   const cpu = parts.find(([dev]) => dev === "cpu"), gpu = parts.find(([dev]) => dev === "cuda");
   let text = "";
   if (cpu) text += `On the CPU, the cache makes generating ${cpu[1].L} tokens ${fmt(cpu[1].x, 1)} times faster. `;
-  if (gpu) text += `On the laptop GPU it's ${fmt(gpu[1].x, 2)} times. With one sequence at a time, each step is so small that the fixed cost of starting GPU work dominates, so the GPU barely notices the extra recomputation until the text gets long. The cache saves the same work on both; it only shows up as speed when the arithmetic is the bottleneck, as it is on a CPU or when serving many users at once. `;
+  if (gpu) text += `On the laptop GPU it's ${fmt(gpu[1].x, 2)} times. With one sequence at a time, each step is so small that the fixed cost of starting GPU work dominates, so recomputing the earlier tokens costs the GPU almost nothing extra. The cache saves the same work on both; it only shows up as speed when the arithmetic is the bottleneck, as it is on a CPU or when serving many users at once. `;
   if (!cpu && !gpu && parts.length) text += `At ${parts[0][1].L} tokens the cache makes generation ${fmt(parts[0][1].x, 1)} times faster. `;
   $("#kv-means").textContent = text + $("#kv-means").textContent;
 }
