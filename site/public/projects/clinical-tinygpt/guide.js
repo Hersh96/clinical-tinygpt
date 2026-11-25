@@ -71,7 +71,7 @@ const GLOSSARY = {
 };
 function setupGlossary() {
   const pop = $("#glossary-pop"), text = $("#glossary-text");
-  let current = null;
+  let current = null, openY = 0;
   const close = () => { pop.hidden = true; current?.focus(); current = null; };
   document.addEventListener("click", (e) => {
     const b = e.target.closest("button.term");
@@ -82,6 +82,7 @@ function setupGlossary() {
       pop.style.left = Math.max(16, Math.min(r.left, innerWidth - pop.offsetWidth - 16)) + "px";
       pop.style.top = (r.bottom + 8 + pop.offsetHeight > innerHeight ? r.top - pop.offsetHeight - 8 : r.bottom + 8) + "px";
       current = b;
+      openY = scrollY;
       $("#glossary-close").focus();
       return;
     }
@@ -89,7 +90,8 @@ function setupGlossary() {
   });
   $("#glossary-close").addEventListener("click", close);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !pop.hidden) close(); });
-  addEventListener("scroll", () => { if (!pop.hidden) close(); }, { passive: true });
+  // Close once the reader scrolls away, but not on the small scroll that clicking or focusing can cause.
+  addEventListener("scroll", () => { if (!pop.hidden && Math.abs(scrollY - openY) > 80) close(); }, { passive: true });
 }
 
 // ---------------------------------------------------------------- progress rail
@@ -189,8 +191,13 @@ function renderTokenizerCompare(d) {
   const ours = names.filter((n) => n !== "gpt2");
   if (t.gpt2 && ours.length) {
     const best = ours.reduce((a, b) => (t[a].tokens_per_word < t[b].tokens_per_word ? a : b));
-    const pct = (1 - t[best].tokens_per_word / t.gpt2.tokens_per_word) * 100;
-    $("#tok-means").textContent = `Our ${Number(best.split("_")[1]).toLocaleString()}-token vocabulary needs ${fmt(Math.abs(pct), 0)}% ${pct >= 0 ? "fewer" : "more"} tokens per word than GPT-2 on clinical notes. ` + $("#tok-means").textContent;
+    const used = ours.includes("ours_8192") ? "ours_8192" : best;
+    const pct = (n) => (1 - t[n].tokens_per_word / t.gpt2.tokens_per_word) * 100;
+    const say = (n) => `${fmt(Math.abs(pct(n)), 0)}% ${pct(n) >= 0 ? "fewer" : "more"}`;
+    const vocab = (n) => Number(n.split("_")[1]).toLocaleString();
+    let text = `Our ${vocab(used)}-token vocabulary, the one the models use, needs ${say(used)} tokens per word than GPT-2 on clinical notes`;
+    text += best !== used ? `, and the ${vocab(best)}-token one needs ${say(best)}. ` : ". ";
+    $("#tok-means").textContent = text + $("#tok-means").textContent;
   }
 }
 

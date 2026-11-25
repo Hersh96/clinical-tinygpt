@@ -61,7 +61,7 @@ python -m http.server -d site/public 8000
 # open http://localhost:8000/projects/clinical-tinygpt/index.html
 ```
 
-The data committed now comes from a short CPU preview run with tiny models, and the page shows a "Preview" banner. `make export` replaces it with the real results.
+The committed data comes from the full runs on the laptop GPU (Nov 2026). Re-running `make export` after new runs refreshes it.
 
 ## Learn the code
 
