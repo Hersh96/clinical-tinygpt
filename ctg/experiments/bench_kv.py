@@ -62,7 +62,7 @@ def main() -> None:
         del model
         torch.cuda.empty_cache()
     model = load_checkpoint(f"ckpt/gpt_{args.size}/last.pt", "cpu")
-    runs.append({"device": "cpu", "rows": bench(model, lengths=CPU_LENGTHS, repeats=1, device="cpu")})
+    runs.append({"device": "cpu", "rows": bench(model, lengths=CPU_LENGTHS, repeats=3, device="cpu")})
     Path(args.out).write_text(json.dumps({"model": f"gpt_{args.size}", "runs": runs}, indent=1))
     mlflow = setup(experiment="eval")
     with mlflow.start_run(run_name="bench_kv"):
